@@ -1,67 +1,46 @@
 package main
 
 import (
-	"bufio"
-	"fmt"
 	"log"
-	"net"
-	"strings"
-	"github.com/pires/go-proxyproto"
+	"net/http"
+
+	"github.com/gorilla/websocket"
 )
 
-func main() {
-	// TCP 서버를 시작합니다.
-	listener, err := net.Listen("tcp", ":4000")
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
+
+func handler(w http.ResponseWriter, r *http.Request) {
+	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Fatalf("Failed to start server: %v", err)
+		log.Println("Upgrade error:", err)
+		return
 	}
-	defer listener.Close()
-
-	// PROXY 프로토콜을 지원하는 리스너로 감쌉니다.
-	proxyListener := &proxyproto.Listener{Listener: listener}
-	defer proxyListener.Close()
-
-	log.Println("Server is listening on port 4000")
+	defer conn.Close()
 
 	for {
-		// 클라이언트의 연결을 수락합니다.
-		conn, err := proxyListener.Accept()
+		// 메시지를 읽습니다.
+		messageType, message, err := conn.ReadMessage()
 		if err != nil {
-			log.Printf("Failed to accept connection: %v", err)
-			continue
+			log.Println("Read error:", err)
+			break
 		}
 
-		// 클라이언트 연결을 처리합니다.
-		go handleConnection(conn)
+		log.Printf("Received: %s", message)
+
+		// 메시지를 다시 보냅니다.
+		if err := conn.WriteMessage(messageType, message); err != nil {
+			log.Println("Write error:", err)
+			break
+		}
 	}
 }
 
-func handleConnection(conn net.Conn) {
-	defer conn.Close()
-	remoteAddr := conn.RemoteAddr().String()
-
-	log.Printf("Client connected: %s", remoteAddr)
-
-	reader := bufio.NewReader(conn)
-	for {
-		// 클라이언트로부터 메시지를 읽습니다.
-		message, err := reader.ReadString('\n')
-		if err != nil {
-			log.Printf("Failed to read message: %v", err)
-			break
-		}
-
-		message = strings.TrimSpace(message)
-		log.Printf("Received message: %s", message)
-
-		// 클라이언트에게 응답을 보냅니다.
-		response := fmt.Sprintf("You said: %s\n", message)
-		_, err = conn.Write([]byte(response))
-		if err != nil {
-			log.Printf("Failed to send response: %v", err)
-			break
-		}
-	}
-
-	log.Printf("Client disconnected: %s", remoteAddr)
+func main() {
+	http.HandleFunc("/", handler)
+	log.Println("WebSocket server started on :8080")
+	log.Fatal(http.ListenAndServe(":8080", nil))
 }
