@@ -27,7 +27,7 @@ func handler(conn net.Conn) {
 }
  
 func main() {
-	l, err := net.Listen("tcp", ":8000")
+	l, err := net.Listen("tcp", ":4000")
 	if err != nil {
 		fmt.Println("Failed to Listen : ", err)
 	}
