@@ -1,46 +1,45 @@
 package main
-
+ 
 import (
-	"log"
-	"net/http"
-
-	"github.com/gorilla/websocket"
+	"fmt"
+	"io"
+	"net"
 )
-
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		return true
-	},
-}
-
-func handler(w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Println("Upgrade error:", err)
-		return
-	}
-	defer conn.Close()
-
+ 
+func handler(conn net.Conn) {
+	recv := make([]byte, 4096)
+ 
 	for {
-		// 메시지를 읽습니다.
-		messageType, message, err := conn.ReadMessage()
+		n, err := conn.Read(recv)
 		if err != nil {
-			log.Println("Read error:", err)
+			if err == io.EOF {
+				fmt.Println("connection is closed from client : ", conn.RemoteAddr().String())
+			}
+			fmt.Println("Failed to receive data : ", err)
 			break
 		}
-
-		log.Printf("Received: %s", message)
-
-		// 메시지를 다시 보냅니다.
-		if err := conn.WriteMessage(messageType, message); err != nil {
-			log.Println("Write error:", err)
-			break
+ 
+		if n > 0 {
+			fmt.Println(string(recv[:n]))
+			conn.Write(recv[:n])
 		}
 	}
 }
-
+ 
 func main() {
-	http.HandleFunc("/", handler)
-	log.Println("WebSocket server started on :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	l, err := net.Listen("tcp", ":8000")
+	if err != nil {
+		fmt.Println("Failed to Listen : ", err)
+	}
+	defer l.Close()
+ 
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			fmt.Println("Failed to Accept : ", err)
+			continue
+		}
+ 
+		go handler(conn)
+	}
 }
