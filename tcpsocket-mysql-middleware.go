@@ -9,11 +9,9 @@ import (
 )
 
 var (
-	clients   = make(map[net.Conn]bool)
-	messages  = make(chan string)
-	addClient = make(chan net.Conn)
-	delClient = make(chan net.Conn)
-	mutex     = &sync.Mutex{}
+	clients  = make(map[net.Conn]bool)
+	messages = make(chan string)
+	mutex    = &sync.Mutex{}
 )
 
 func handleConnection(conn net.Conn) {
@@ -29,6 +27,7 @@ func handleConnection(conn net.Conn) {
 	for scanner.Scan() {
 		text := scanner.Text()
 		if len(text) > 0 {
+			fmt.Printf("Received from %s: %s\n", clientAddr, text)
 			messages <- fmt.Sprintf("%s: %s", clientAddr, text)
 		}
 	}
@@ -43,7 +42,7 @@ func handleConnection(conn net.Conn) {
 func broadcastMessages() {
 	for {
 		msg := <-messages
-		fmt.Println(msg)
+		fmt.Println("Broadcasting:", msg)
 		mutex.Lock()
 		for conn := range clients {
 			fmt.Fprintln(conn, msg)
@@ -74,7 +73,6 @@ func main() {
 	fmt.Println("Server started on port 4000")
 
 	go broadcastMessages()
-
 	go acceptConnections(listener)
 
 	// Handle server input
