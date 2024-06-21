@@ -9,35 +9,42 @@ import (
 )
 
 var (
-	mutex = &sync.Mutex{}
+	clientID  int
+	mutex     = &sync.Mutex{}
 )
 
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
+
+	mutex.Lock()
+	clientID++
+	id := clientID
+	mutex.Unlock()
+
 	clientAddr := conn.RemoteAddr().String()
-	fmt.Printf("Client connected: %s\n", clientAddr)
+	fmt.Printf("Client %d connected: %s\n", id, clientAddr)
 
 	reader := bufio.NewReader(conn)
 	writer := bufio.NewWriter(conn)
 	for {
 		text, err := reader.ReadString('\n')
 		if err != nil {
-			fmt.Printf("Error reading from client %s: %v\n", clientAddr, err)
+			fmt.Printf("Error reading from client %d %s: %v\n", id, clientAddr, err)
 			break
 		}
 		text = text[:len(text)-1] // Remove the newline character
-		fmt.Printf("Received from %s: %s\n", clientAddr, text)
-		
+		fmt.Printf("Received from client %d %s: %s\n", id, clientAddr, text)
+
 		// Echo back the message to the same client
-		_, err = writer.WriteString(fmt.Sprintf("Echo from server: %s\n", text))
+		_, err = writer.WriteString(fmt.Sprintf("Echo from server to client %d: %s\n", id, text))
 		if err != nil {
-			fmt.Printf("Error writing to client %s: %v\n", clientAddr, err)
+			fmt.Printf("Error writing to client %d %s: %v\n", id, clientAddr, err)
 			break
 		}
 		writer.Flush()
 	}
 
-	fmt.Printf("Client disconnected: %s\n", clientAddr)
+	fmt.Printf("Client %d disconnected: %s\n", id, clientAddr)
 }
 
 func acceptConnections(listener net.Listener) {
