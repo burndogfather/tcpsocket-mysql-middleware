@@ -20,7 +20,7 @@ func handleConnection(conn net.Conn) {
 	reader := bufio.NewReader(conn)
 	writer := bufio.NewWriter(conn)
 	for {
-		text, err := reader.ReadString('::')
+		text, err := reader.ReadString('=')
 		if err != nil {
 			fmt.Printf("Error reading from client %s: %v\n", clientAddr, err)
 			break
