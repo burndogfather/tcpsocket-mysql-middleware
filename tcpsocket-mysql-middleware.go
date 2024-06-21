@@ -23,13 +23,14 @@ func handleConnection(conn net.Conn) {
 	clients[conn] = true
 	mutex.Unlock()
 
-	scanner := bufio.NewScanner(conn)
-	for scanner.Scan() {
-		text := scanner.Text()
-		if len(text) > 0 {
-			fmt.Printf("Received from %s: %s\n", clientAddr, text)
-			messages <- fmt.Sprintf("%s: %s", clientAddr, text)
+	reader := bufio.NewReader(conn)
+	for {
+		text, err := reader.ReadString('\n')
+		if err != nil {
+			break
 		}
+		fmt.Printf("Received from %s: %s", clientAddr, text)
+		messages <- fmt.Sprintf("%s: %s", clientAddr, text)
 	}
 
 	mutex.Lock()
