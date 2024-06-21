@@ -9,28 +9,16 @@ import (
 )
 
 var (
-	clients  = make(map[net.Conn]bool)
-	messages = make(chan string)
-	mutex    = &sync.Mutex{}
+	mutex = &sync.Mutex{}
 )
 
 func handleConnection(conn net.Conn) {
-	defer func() {
-		conn.Close()
-		mutex.Lock()
-		delete(clients, conn)
-		mutex.Unlock()
-		fmt.Printf("Client disconnected: %s\n", conn.RemoteAddr().String())
-	}()
-
+	defer conn.Close()
 	clientAddr := conn.RemoteAddr().String()
 	fmt.Printf("Client connected: %s\n", clientAddr)
 
-	mutex.Lock()
-	clients[conn] = true
-	mutex.Unlock()
-
 	reader := bufio.NewReader(conn)
+	writer := bufio.NewWriter(conn)
 	for {
 		text, err := reader.ReadString('\n')
 		if err != nil {
@@ -39,23 +27,17 @@ func handleConnection(conn net.Conn) {
 		}
 		text = text[:len(text)-1] // Remove the newline character
 		fmt.Printf("Received from %s: %s\n", clientAddr, text)
-		messages <- fmt.Sprintf("%s: %s", clientAddr, text)
-	}
-}
-
-func broadcastMessages() {
-	for {
-		msg := <-messages
-		fmt.Println("Broadcasting:", msg)
-		mutex.Lock()
-		for conn := range clients {
-			_, err := fmt.Fprintln(conn, msg)
-			if err != nil {
-				fmt.Printf("Error broadcasting to %s: %v\n", conn.RemoteAddr().String(), err)
-			}
+		
+		// Echo back the message to the same client
+		_, err = writer.WriteString(fmt.Sprintf("Echo from server: %s\n", text))
+		if err != nil {
+			fmt.Printf("Error writing to client %s: %v\n", clientAddr, err)
+			break
 		}
-		mutex.Unlock()
+		writer.Flush()
 	}
+
+	fmt.Printf("Client disconnected: %s\n", clientAddr)
 }
 
 func acceptConnections(listener net.Listener) {
@@ -79,15 +61,14 @@ func main() {
 
 	fmt.Println("Server started on port 4000")
 
-	go broadcastMessages()
 	go acceptConnections(listener)
 
-	// Handle server input
+	// Handle server input (optional)
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
 		text := scanner.Text()
 		if len(text) > 0 {
-			messages <- fmt.Sprintf("Server: %s", text)
+			fmt.Printf("Server input: %s\n", text)
 		}
 	}
 }
