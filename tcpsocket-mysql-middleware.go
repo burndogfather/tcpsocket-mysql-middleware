@@ -1,45 +1,88 @@
 package main
- 
+
 import (
+	"bufio"
 	"fmt"
-	"io"
 	"net"
+	"os"
+	"sync"
 )
- 
-func handler(conn net.Conn) {
-	recv := make([]byte, 4096)
- 
+
+var (
+	clients   = make(map[net.Conn]bool)
+	messages  = make(chan string)
+	addClient = make(chan net.Conn)
+	delClient = make(chan net.Conn)
+	mutex     = &sync.Mutex{}
+)
+
+func handleConnection(conn net.Conn) {
+	defer conn.Close()
+	clientAddr := conn.RemoteAddr().String()
+	fmt.Printf("Client connected: %s\n", clientAddr)
+
+	mutex.Lock()
+	clients[conn] = true
+	mutex.Unlock()
+
+	scanner := bufio.NewScanner(conn)
+	for scanner.Scan() {
+		text := scanner.Text()
+		if len(text) > 0 {
+			messages <- fmt.Sprintf("%s: %s", clientAddr, text)
+		}
+	}
+
+	mutex.Lock()
+	delete(clients, conn)
+	mutex.Unlock()
+
+	fmt.Printf("Client disconnected: %s\n", clientAddr)
+}
+
+func broadcastMessages() {
 	for {
-		n, err := conn.Read(recv)
-		if err != nil {
-			if err == io.EOF {
-				fmt.Println("connection is closed from client : ", conn.RemoteAddr().String())
-			}
-			fmt.Println("Failed to receive data : ", err)
-			break
+		msg := <-messages
+		fmt.Println(msg)
+		mutex.Lock()
+		for conn := range clients {
+			fmt.Fprintln(conn, msg)
 		}
- 
-		if n > 0 {
-			fmt.Println(string(recv[:n]))
-			conn.Write(recv[:n])
-		}
+		mutex.Unlock()
 	}
 }
- 
-func main() {
-	l, err := net.Listen("tcp", ":4000")
-	if err != nil {
-		fmt.Println("Failed to Listen : ", err)
-	}
-	defer l.Close()
- 
+
+func acceptConnections(listener net.Listener) {
 	for {
-		conn, err := l.Accept()
+		conn, err := listener.Accept()
 		if err != nil {
-			fmt.Println("Failed to Accept : ", err)
+			fmt.Println("Error accepting connection:", err)
 			continue
 		}
- 
-		go handler(conn)
+		go handleConnection(conn)
+	}
+}
+
+func main() {
+	listener, err := net.Listen("tcp", ":4000")
+	if err != nil {
+		fmt.Println("Error starting server:", err)
+		return
+	}
+	defer listener.Close()
+
+	fmt.Println("Server started on port 4000")
+
+	go broadcastMessages()
+
+	go acceptConnections(listener)
+
+	// Handle server input
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		text := scanner.Text()
+		if len(text) > 0 {
+			messages <- fmt.Sprintf("Server: %s", text)
+		}
 	}
 }
