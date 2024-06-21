@@ -27,6 +27,7 @@ func handleConnection(conn net.Conn) {
 	for {
 		text, err := reader.ReadString('\n')
 		if err != nil {
+			fmt.Printf("Error reading from client %s: %v\n", clientAddr, err)
 			break
 		}
 		fmt.Printf("Received from %s: %s", clientAddr, text)
@@ -46,7 +47,10 @@ func broadcastMessages() {
 		fmt.Println("Broadcasting:", msg)
 		mutex.Lock()
 		for conn := range clients {
-			fmt.Fprintln(conn, msg)
+			_, err := fmt.Fprintln(conn, msg)
+			if err != nil {
+				fmt.Printf("Error broadcasting to %s: %v\n", conn.RemoteAddr().String(), err)
+			}
 		}
 		mutex.Unlock()
 	}
