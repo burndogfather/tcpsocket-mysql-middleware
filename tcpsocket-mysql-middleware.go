@@ -15,7 +15,14 @@ var (
 )
 
 func handleConnection(conn net.Conn) {
-	defer conn.Close()
+	defer func() {
+		conn.Close()
+		mutex.Lock()
+		delete(clients, conn)
+		mutex.Unlock()
+		fmt.Printf("Client disconnected: %s\n", conn.RemoteAddr().String())
+	}()
+
 	clientAddr := conn.RemoteAddr().String()
 	fmt.Printf("Client connected: %s\n", clientAddr)
 
@@ -30,15 +37,10 @@ func handleConnection(conn net.Conn) {
 			fmt.Printf("Error reading from client %s: %v\n", clientAddr, err)
 			break
 		}
-		fmt.Printf("Received from %s: %s", clientAddr, text)
+		text = text[:len(text)-1] // Remove the newline character
+		fmt.Printf("Received from %s: %s\n", clientAddr, text)
 		messages <- fmt.Sprintf("%s: %s", clientAddr, text)
 	}
-
-	mutex.Lock()
-	delete(clients, conn)
-	mutex.Unlock()
-
-	fmt.Printf("Client disconnected: %s\n", clientAddr)
 }
 
 func broadcastMessages() {
